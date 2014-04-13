@@ -124,6 +124,7 @@ group :test, :development do
   gem 'rspec-rails', '~> 2.14.0'
   gem 'pry'
   gem 'jasmine-rails'
+  gem 'dotenv-rails'
 end
 
 group :test do
