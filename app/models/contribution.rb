@@ -25,7 +25,7 @@ class Contribution < ActiveRecord::Base
   scope :anonymous, -> { where(anonymous: true) }
   scope :credits, -> { where("credits OR lower(payment_method) = 'credits'") }
   scope :not_anonymous, -> { where(anonymous: false) }
-  scope :confirmed_today, -> { with_state('confirmed').where("contributions.confirmed_at::date = current_date ") }
+  scope :confirmed_today, -> { with_state('confirmed').where("contributions.confirmed_at::date = to_date(?, 'yyyy-mm-dd')", Time.now.strftime('%Y-%m-%d')) }
 
   scope :can_cancel, -> { where("contributions.can_cancel") }
 
@@ -99,6 +99,18 @@ class Contribution < ActiveRecord::Base
       { contribution_id: self.id },
       contribution: self
     )
+  end
+
+  def notify_to_backoffice(template_name, options = {})
+    _user = User.find_by(email: CatarseSettings[:email_payments])
+
+    if _user
+      Notification.notify_once(template_name,
+        _user,
+        { contribution_id: self.id },
+        { contribution: self }.merge!(options)
+      )
+    end
   end
 
   # Used in payment engines

@@ -2,18 +2,31 @@ describe("MixPanel", function() {
   var view;
   var mixpanel;
   var default_options = {
-    'page name':  document.title,
-    'user_id':    null,
-    'project':    null,
-    'url':        window.location
+    'page name':          document.title,
+    'user_id':            null,
+    'created':            null,
+    'last_login':         null,
+    'contributions':      null,
+    'has_contributions':  null,
+    'project':            null,
+    'url':                window.location
   };
+  var user = {id: 1, name: "Foo Bar"};
 
   beforeEach(function(){
     view = new App.views.MixPanel();
     view.controller = "testController";
     view.action = "testAction";
+
+    window.FB = {
+      Event: {
+        subscribe: function(event_name, callback) {}
+      }
+    };
+
     window.mixpanel = mixpanel = {
       name_tag: function(){},
+      alias: function(){},
       identify: function(){},
       track: function(){},
       people: {
@@ -24,6 +37,42 @@ describe("MixPanel", function() {
     spyOn(mixpanel, "identify");
     spyOn(mixpanel, "track");
     spyOn(mixpanel.people, "set");
+  });
+
+  describe('#trackOnFacebookLike', function() {
+    beforeEach(function(){
+      spyOn(view, 'trackSocial');
+
+      spyOn(FB.Event, "subscribe").and.callFake(function(event, callback) {
+        callback('FB Like for project', 'element');
+      });
+    });
+
+    it("should call subscribe on edge.create", function(){
+      view.trackOnFacebookLike();
+      expect(FB.Event.subscribe).toHaveBeenCalledWith('edge.create', jasmine.any(Function));
+      expect(view.trackSocial).toHaveBeenCalledWith('FB Like for project', 'element');
+    });
+
+    it("should call subscribe on edge.remove", function(){
+      view.trackOnFacebookLike();
+      expect(FB.Event.subscribe).toHaveBeenCalledWith('edge.remove', jasmine.any(Function));
+      expect(view.trackSocial).toHaveBeenCalledWith('FB Unlike for project', 'element');
+    });
+  });
+
+  describe('#trackSocial', function(){
+    var text = 'Foo Bar';
+    var element = $('<div id="element" data-title="Foo"></div>');
+
+    beforeEach(function(){
+      spyOn(view, "track");
+    });
+
+    it("should call track when social (facebook, twitter) event subscribe is fired", function(){
+      view.trackSocial(text, element);
+      expect(view.track).toHaveBeenCalledWith(text, { ref: 'Foo' })
+    });
   });
 
   describe("#trackPageLoad", function(){
@@ -89,18 +138,80 @@ describe("MixPanel", function() {
     });
   });
 
-  describe("#identifyUser", function() {
-    var user = {id: 1, name: "Foo Bar"};
-
+  describe("#onLogin", function(){
     beforeEach(function() {
-      var $el = Backbone.$('<body></body>');
-      $el.data('user', user);
-      view.setElement($el, false);
-      view.identifyUser();
+      spyOn(mixpanel, "alias");
+      spyOn(view, "track");
     });
 
-    it("should set user", function() {
-      expect(view.user).toEqual(user);
+    describe("when user has 1 login", function(){
+      beforeEach(function() {
+        user.sign_in_count = 1;
+        view.user = user;
+        view.onLogin();
+      });
+
+      it("should alias the user in mixpanel", function(){
+        expect(mixpanel.alias).toHaveBeenCalledWith(user.id);
+      });
+
+      it("should track login event", function(){
+        expect(view.track).toHaveBeenCalledWith("Signed up");
+      });
+    });
+
+    describe("when user has more than 1 login", function(){
+      beforeEach(function() {
+        user.sign_in_count = 2;
+        view.user = user;
+        view.onLogin();
+      });
+
+      it("should alias the user in mixpanel", function(){
+        expect(mixpanel.alias).toHaveBeenCalledWith(user.id);
+      });
+
+      it("should track login event", function(){
+        expect(view.track).toHaveBeenCalledWith("Logged in");
+      });
+    });
+  });
+
+  describe("#detectLogin", function() {
+    describe("when we have an user", function(){
+      beforeEach(function() {
+        spyOn(view, "onLogin");
+        store.set('user_id', null);
+        view.user = user;
+        view.detectLogin();
+      });
+
+      it("should call onLogin", function(){
+        expect(view.onLogin).toHaveBeenCalled();
+      });
+
+      it("should store the user id", function(){
+        expect(store.get('user_id')).toBe(user.id);
+      });
+    });
+
+    describe("when we do not have an user", function(){
+      beforeEach(function() {
+        store.set('user_id', 1);
+        view.user = null;
+        view.detectLogin();
+      });
+
+      it("should store null in the user id", function(){
+        expect(store.get('user_id')).toBe(null);
+      });
+    });
+  });
+
+  describe("#identifyUser", function() {
+    beforeEach(function() {
+      view.user = user;
+      view.identifyUser();
     });
 
     it("should give a mixpanel nametag to user", function() {
