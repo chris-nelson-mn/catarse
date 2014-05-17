@@ -479,7 +479,7 @@ DEPENDENCIES
   compass-rails
   coveralls
   database_cleaner
-  devise (~> 3.0.2)
+  devise
   dotenv-rails
   draper
   ezcrypto
